@@ -1,5 +1,5 @@
 //
-// (win)grit source code, v0.8.2
+// (win)grit source code, v0.8.1
 // (20050313-20080512, cearn)
 
 // === TOC ===

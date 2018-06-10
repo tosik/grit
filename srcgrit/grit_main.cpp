@@ -1,7 +1,7 @@
 //
 //! \file grit_main.cpp
 //!   Entry file for cmd-line grit.
-//! \date 20050913 - 20100204
+//! \date 20050913 - 20100327
 //! \author cearn
 //
 /* === NOTES ===
@@ -36,10 +36,6 @@
 #include <strings.h>
 #endif	// _MSC_VER
 
-#ifdef _MSC_VER
-#include "grit_version.h"
-#endif
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -63,18 +59,23 @@ void grit_dump_short(GritRec *gr, FILE *fp, const char *pre);
 // CONSTANTS
 // --------------------------------------------------------------------
 
-#ifndef PACKAGE_VERSION
-#error PACKAGE_VERSION must be defined such as "0.8.4"
+#ifndef GRIT_VERSION
+#define GRIT_VERSION	"0.8.4"
+#endif
+
+#ifndef GRIT_BUILD
+#define GRIT_BUILD		"20100204"
 #endif
 
 // --- Application constants ---
 
-#define APP_VERSION	PACKAGE_VERSION
+#define APP_VERSION	GRIT_VERSION
+#define APP_BUILD	GRIT_BUILD
 
-const char appIdent[]= "grit v" PACKAGE_VERSION;
+const char appIdent[]= "grit v" GRIT_VERSION;
 
 const char appHelpText[]= 
-"GRIT: GBA Raster Image Transmogrifier. (grit v" APP_VERSION ")\n"
+"GRIT: GBA Raster Image Transmogrifier. (grit v" APP_VERSION ", " APP_BUILD ")\n"
 "  Converts bitmap files into something the GBA can use.\n"
 "usage: grit srcfile(s) [args]\n\n"
 "\n--- Graphics options (base: \"-g\") ---\n"
@@ -84,8 +85,7 @@ const char appHelpText[]=
 //"-ga{n}         Gfx pixel offset (non-zero pixels) [0]\n"
 //"-gA{n}         Gfx pixel offset n (all pixels) [0]\n"
 "-gb | -gt      Gfx format, bitmap or tile [tile]\n"
-"-gB{fmt}       Gfx format / bit depth (1, 2, 4, 8, 16, a5i3, a3i5) [img bpp]\n"
-"-gx            Enable texture operations\n"
+"-gB{n}         Gfx bit depth (1, 2, 4, 8, 16) [img bpp]\n"
 "-gS            Shared graphics\n"
 "-gT{n}         Transparent color; rrggbb hex or 16bit BGR hex [FF00FF]\n"
 "-al{n}         Area left [0]\n"
@@ -142,7 +142,6 @@ const char appHelpText[]=
 "-W{n}          Warning/log level 1, 2 or 3 [1]\n"
 "-Z[!lhr0]      All compression: off, lz77, huff, RLE, off+header [off]\n"
 "\nNew options: -fr, -ftr, -gS, -O, -pS, -S, -Z0 (et al)\n";
-
 
 
 // --------------------------------------------------------------------
@@ -292,10 +291,7 @@ bool grit_parse_pal(GritRec *gr, const strvec &args)
 		gr->palStart= CLI_INT("-ps", 0);
 
 		if( (val= CLI_INT("-pn", -1)) >= 0)
-		{
 			gr->palEnd= gr->palStart + val;
-			gr->palEndSet = true;
-		}
 		else if( (val= CLI_INT("-pe", -1)) >= 0)
 			gr->palEnd= val;
 	}
@@ -349,23 +345,10 @@ bool grit_parse_gfx(GritRec *gr, const strvec &args)
 			lprintf(LOG_WARNING, "No main mode specified (-gt/-gb).\n");
 		gr->gfxMode= GRIT_GFX_TILE;
 	}
-	
-	if(CLI_BOOL("-gx"))
-		gr->texModeEnabled = true;
 
 	// Bitdepth override
-	char* bppOverride = CLI_STR("-gB",0);
-	if(bppOverride)
-	{
-		if(!strcasecmp(bppOverride,"a3i5"))
-			gr->gfxTexMode = GRIT_TEXFMT_A3I5;
-		else if(!strcasecmp(bppOverride,"a5i3"))
-			gr->gfxTexMode = GRIT_TEXFMT_A5I3;
-		else if(!strcasecmp(bppOverride,"4x4"))
-			gr->gfxTexMode = GRIT_TEXFMT_4x4;
-		else if( (val= CLI_INT("-gB", 0)) != 0)
-			gr->gfxBpp = val;
-	}
+	if( (val= CLI_INT("-gB", 0)) != 0)
+		gr->gfxBpp= val;
 
 	// Transparency
 	if( CLI_BOOL("-gT") )
@@ -672,7 +655,6 @@ bool grit_parse(GritRec *gr, const strvec &args)
 bool grit_parse_shared(GritRec *gr, const strvec &args)
 {
 	int val;
-	GritShared *grs = gr->shared;
 
 	// datatype: 8, 16, 32
 	if( (val= CLI_INT("-U", 0)) != 0)
@@ -708,39 +690,30 @@ bool grit_parse_shared(GritRec *gr, const strvec &args)
 
 	if(bDst && bSym)
 	{
-		strrepl(&grs->dstPath, pDst);
-		strrepl(&grs->symName, pSym);		
+		strrepl(&gr->dstPath, pDst);
+		strrepl(&gr->symName, pSym);		
 	}	
 	else if( bDst && !bSym)
 	{
-		strrepl(&grs->dstPath, pDst);
-		strrepl(&grs->symName, gr->symName);
+		strrepl(&gr->dstPath, pDst);
 	}
 	else if(!bDst &&  bSym)
 	{
-		strrepl(&grs->symName, pSym);
+		strrepl(&gr->symName, pSym);
 		if(isempty(gr->dstPath))
-		    strrepl(&grs->dstPath, pSym);		
-		else
-		    strrepl(&grs->dstPath, gr->dstPath);
+			strrepl(&gr->dstPath, pSym);		
 	}
 	else
 	{
 		char symName[MAXPATHLEN];
-		
+
 		path_get_title(symName, gr->dstPath, MAXPATHLEN);
 		strcat(symName, "Shared");
 		lprintf(LOG_WARNING, "No -O or -S in shared run. Using \"%s\".\n", symName);
-		strrepl(&grs->symName, symName);
-		strrepl(&grs->dstPath, gr->dstPath);
+		strrepl(&gr->symName, symName);
 		gr->bAppend= true;
 	}
 
-        return true;
-}
-
-bool grit_prep_shared_output(GritRec*gr, const strvec &args)
-{
 	if(!gr->gfxIsShared)
 		gr->gfxProcMode &= ~GRIT_OUTPUT;
 		
@@ -754,41 +727,13 @@ bool grit_prep_shared_output(GritRec*gr, const strvec &args)
 	}
 		
 	return true;
-};
+}
 
 
 // --------------------------------------------------------------------
 // External files
 // --------------------------------------------------------------------
 
-bool grit_load_shared_pal(GritRec *gr)
-{
-    lprintf(LOG_STATUS, "Loading shared palette.\n");
-
-    GritShared *grs = gr->shared;
-    char path[1024];
-    path_repl_ext(path, grs->dstPath, c_fileTypes[gr->fileType], MAXPATHLEN);
-
-    if(file_exists(path))
-    {
-	FILE* fp = fopen(path, "r");
-
-	int len;
-	int chunk;
-	if(!grs->palRec.data)
-	{
-	    grs->palRec.data = (BYTE*)malloc(512 * sizeof(char));
-	    memset(grs->palRec.data, 0, 512);
-	}
-	im_data_gas(fp, grs->symName, grs->palRec.data, &len, &chunk);
-	grs->palRec.width = 4;
-	grs->palRec.height = len;
-    }
-    else
-	lprintf(LOG_WARNING, "\tShared palette (%s) does not yet exist.\n", path);
-
-    return true;
-}
 
 //! Load an external tile file.
 /*!
@@ -902,8 +847,8 @@ void args_gather(strvec &args, int argc, char **argv)
 	// --- Load commandline options ---
 	for(ii=0; ii<argc; ii++)
 		args.push_back(strdup(argv[ii]));
-	
 
+	
 	// --- Find option-file from {{path}}.grit or -ff ---
 	path_repl_ext(str, argv[1], "grit", MAXPATHLEN);
 	pstr= cli_str("-ff", args, str);
@@ -919,43 +864,42 @@ void args_gather(strvec &args, int argc, char **argv)
 		bool hasFiles= true;
 		strvec files;		// For possible additional files
 
-	// Get flags
-	const char seps[]= "\n\r\t ";
+		// Get flags
+		const char seps[]= "\n\r\t ";
 
-	while( !feof(fp) )
-	{
-			fgets(str, MAXPATHLEN, fp);
-		// Find comment and end string there
-		if( pstr= strchr(str, '#') )
-			*pstr= '\0';
-		
-		// Tokenize arguments
-		pstr= strtok(str, seps);
-		while( pstr != NULL )
+		while( !feof(fp) )
 		{
+			fgets(str, MAXPATHLEN, fp);
+			// Find comment and end string there
+			if( pstr= strchr(str, '#') )
+				*pstr= '\0';
+			
+			// Tokenize arguments
+			pstr= strtok(str, seps);
+			while( pstr != NULL )
+			{
 				if(pstr[0] == '-')
 					hasFiles= false;
 
 				if(hasFiles)
 					files.push_back(strdup(pstr));
 				else
-			args.push_back(strdup(pstr));
+					args.push_back(strdup(pstr));
 
-			pstr= strtok(NULL, seps);
+				pstr= strtok(NULL, seps);
+			}
 		}
-	}
-	fclose(fp);
+		fclose(fp);
 
 		// Add additional grit files.
 		// NOTE: no strdup here; I just need to add the pointers.
 		if(!files.empty())
 		{
-
+			// find first non-path
 			for(ii=0; ii<argc; ii++)
 				if(args[ii][0]=='-')
 					break;
-
-			args.insert(args.begin() + ii, files.begin(), files.end());
+			args.insert(args.begin()+ii, files.begin(), files.end());
 		}
 
 	}
@@ -1069,12 +1013,6 @@ int run_shared(GritRec *gr, const strvec &args, const strvec &fpaths)
 	if(gr->gfxIsShared)
 		grit_load_ext_tiles(gr);
 
-	if(gr->palIsShared)
-	{
-	    grit_parse_shared(gr, args);
-	    grit_load_shared_pal(gr);
-	}
-
 	for(ii=0; ii<fpaths.size(); ii++)
 	{
 		lprintf(LOG_STATUS, "Input file %s\n", fpaths[ii]);
@@ -1114,7 +1052,6 @@ int run_shared(GritRec *gr, const strvec &args, const strvec &fpaths)
 	strrepl(&gr->srcPath, fpaths[0]);
 
 	grit_parse_shared(gr, args);
-	grit_prep_shared_output(gr, args);
 
 	grs_run(grs, gr);
 
@@ -1171,16 +1108,16 @@ int run_main(int argc, char **argv)
 		result= EXIT_FAILURE;
 	}
 
-		// --- Finish up ---
-		grit_free(gr);
+	// --- Finish up ---
+	grit_free(gr);
 
-		for(ii=0; ii<fpaths.size(); ii++)
-			free(fpaths[ii]);
+	for(ii=0; ii<fpaths.size(); ii++)
+		free(fpaths[ii]);
 
 	for(ii=0; ii<args.size(); ii++)
 		free(args[ii]);
 
-		log_exit();
+	log_exit();
 
 	return result;
 }

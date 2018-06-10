@@ -1,7 +1,7 @@
 //
 //! \file cli.cpp
 //!  Command line interface
-//! \date 20050823 - 20080130
+//! \date 20050823 - 20100327
 //! \author gauauu, cearn
 /* === NOTES ===
 */
@@ -52,14 +52,14 @@ char *cli_str(const char *key, const strvec &args, const char *dflt)
 {
 	int pos = cli_find_key(key, args), count= args.size();
 	if(pos >= count)
-		return (char *)dflt;
+		return (char*)dflt;
 
 	char *str= &args[pos][strlen(key)];
 	if(*str != '\0')					// attached field
 		return str;
 
 	if(pos == count-1)			// separate field, but OOB
-		return (char *)dflt;
+		return (char*)dflt;
 
 	return args[pos+1];
 }

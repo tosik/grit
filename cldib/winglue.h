@@ -38,8 +38,14 @@
 
 #endif	// _SYS_PARAM_H
 
-#define strcasecmp stricmp		// 
-
+// Apparently MSVC2008 is really fussy about these. I just hope there's 
+// no compilation problems because of the underscores >_>
+#if _MSC_VER >= 1500
+	#define strcasecmp	_stricmp
+	#define strdup		_strdup
+#else
+	#define strcasecmp	stricmp
+#endif	// _MSC_VER >= 1500
 
 #else	// _MSC_VER
 

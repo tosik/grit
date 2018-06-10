@@ -21,9 +21,6 @@
 #include <cldib.h>
 #include "grit.h"
 
-#ifdef _MSC_VER
-#include "grit_version.h"
-#endif
 
 // --------------------------------------------------------------------
 // CONSTANTS
@@ -31,7 +28,7 @@
 
 
 static const char __grit_app_string[]=
-"\tExported by Cearn's GBA Image Transmogrifier, v" PACKAGE_VERSION "\n"
+"\tExported by Cearn's GBA Image Transmogrifier, v" GRIT_VERSION "\n"
 "\t( http://www.coranac.com/projects/#grit )";
 
 
@@ -383,7 +380,7 @@ void grit_dump_short(GritRec *gr, FILE *fp, const char *pre)
 		pre= "";
 
 	fputs(pre, fp);
-	fprintf(fp, "%s >%s %s.%s\n",
+	fprintf(fp, "%s >%s %s.%s %s\n", 
 		gr->srcPath, (gr->bAppend ? ">":""), 
 		gr->dstPath, (gr->bHeader ? "+.h":"") );
 
@@ -597,7 +594,7 @@ bool grit_validate_area(GritRec *gr)
 //! Validate parameters.
 /*!	Makes sure all the settings in \a gr are valid. For example, 
 	tilemap and bitmap mode are mutually exclusive; bpp must be 
-	1, 2, 4, 8, etc. Some things are fatal
+	1, 2, 4, 8, or 16 and more of such kind. Some things are fatal
 	(those two are), but some can be accounted for like reversed 
 	pal start and end indices and non-aligned areas.
 */
@@ -605,7 +602,7 @@ bool grit_validate(GritRec *gr)
 {
 	int tmp;
 
-	lprintf(LOG_STATUS, "Validating gr.\n");
+	lprintf(LOG_STATUS, "Validatating gr.\n");
 
 	// source dib MUST be loaded already!
 	if(gr->srcDib == NULL)
@@ -619,39 +616,7 @@ bool grit_validate(GritRec *gr)
 
 	// --- Options ---
 
-	//analyze supplied texture modes. these are invalid unless -gx is provided
-	bool demand_tex_mode = true;
-	switch(gr->gfxTexMode)
-	{
-	case GRIT_TEXFMT_A5I3:
-		if(dib_get_bpp(gr->srcDib) != 32)
-			lprintf(LOG_WARNING," tex format A5I3 specified but source graphics contains no alpha\n");
-		gr->gfxBpp = 3;
-		break;
-	case GRIT_TEXFMT_A3I5:
-		if(dib_get_bpp(gr->srcDib) != 32)
-			lprintf(LOG_WARNING," tex format A3I5 specified but source graphics contains no alpha\n");
-		gr->gfxBpp = 5;
-		break;
-	case GRIT_TEXFMT_4x4:
-		lprintf(LOG_ERROR, " 4x4 is not supported yet. how did you know to try it?\n");
-		return false;
-	default:
-		demand_tex_mode = false;
-		break;
-	}
-
-	//make sure that -gx was provided
-	if(demand_tex_mode)
-	{
-		if(!gr->texModeEnabled)
-		{
-		lprintf(LOG_ERROR, " Specified a texture-only format but did not supply -gx\n");
-		return false;
-		}
-	}
-
-	//truecolor must be bitmaps.
+	// bpp must be 2^n; truecolor WILL be bitmaps.
 	int bpp= gr->gfxBpp;
 	switch(bpp)
 	{
@@ -665,19 +630,6 @@ bool grit_validate(GritRec *gr)
 		gr->mapProcMode= GRIT_EXCLUDE;	// No map. REPONDER
 		gr->palProcMode= GRIT_EXCLUDE;	// No pal either.
 		break;
-	case 3: case 5:
-		gr->mapProcMode= GRIT_EXCLUDE;	// No map. REPONDER
-		if(!gr->palEndSet)
-		{
-			gr->palEndSet = true;
-			lprintf(LOG_STATUS,"Guessing palette size for A3I5/A5I3 texture\n");
-			if(bpp==3)
-				gr->palEnd = gr->palStart+8;
-			else
-				gr->palEnd = gr->palStart+32;
-		}
-		break;
-
 	default:
 		lprintf(LOG_ERROR, "  Bad bpp (%d).\n", bpp);
 		return false;

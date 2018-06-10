@@ -1,13 +1,12 @@
 //
 //! \file grit_xp.cpp
 //!   Exporter routines
-//! \date 20050814 - 20091231
+//! \date 20050814 - 20100327
 //! \author cearn
 //
 /* === NOTES ===
-
   * 20100321,dm: static const is not a constant expression in c
-    switch back to define.
+     switch back to define.
   * 20091231,jv: use "static const" for size instead of "#define".
   * 20081129,jv:
 	- fixed grit_prep_grf. The GRF chunk itself should not have 
@@ -71,18 +70,6 @@ public:
 
 bool grit_prep_item(GritRec *gr, eint id, DataItem *item);
 
-struct ule32 {
-	unsigned int i;
-	#if BYTE_ORDER == LITTLE_ENDIAN
-		operator unsigned int () { return i; }
-		unsigned int & operator = (unsigned int i) { return this->i = i; }
-	#else
-		operator unsigned int () { return i<<24 | i<<8&0xFF0000 | i>>8&0xFF00 | i>>24; }
-		unsigned int & operator = (unsigned int i) { return this->i = i<<24 | i<<8&0xFF0000 | i>>8&0xFF00 | i>>24; }
-	#endif
-	ule32() {}
-	ule32(unsigned int i) { *this = i; }
-};
 
 // --- GBFS components ---
 
@@ -117,7 +104,7 @@ int grit_gbfs_entry_init(GBFS_ENTRY *gben, const RECORD *rec,
 struct chunk_t
 {
 	char	id[4];
-	ule32	size;
+	u32		size;
 	u8		data[1];
 };
 
@@ -129,9 +116,9 @@ struct GrfHeader
 			u8	gfxAttr, mapAttr, mmapAttr, palAttr;
 		};
 	};
-	u8		tileWidth, tileHeight;
-	u8		metaWidth, metaHeight;
-	ule32	gfxWidth, gfxHeight;
+	u8	tileWidth, tileHeight;
+	u8	metaWidth, metaHeight;
+	u32	gfxWidth, gfxHeight;
 };
 
 chunk_t *chunk_create(const char *id, const RECORD *rec);
@@ -326,7 +313,7 @@ bool grit_xp_c(GritRec *gr)
 	{
 		// Open temp and input file
 		tmpnam(tmppath);
-		if( (fout=fopen(tmppath, "w+")) == NULL)
+		if( (fout=fopen(tmppath, "w")) == NULL)
 			return false;
 
 		fin= fopen(fpath, "r");
@@ -379,22 +366,10 @@ bool grit_xp_c(GritRec *gr)
 		file_copy(fout, fin, -1);
 
 		// close files and rename
+		fclose(fout);
 		fclose(fin);
-		if (rename(tmppath, fpath) < 0)
-		{
-			// in case rename fails, copy over the source file instead
-			fin= fopen(fpath, "w");
-			fseek(fout, 0, SEEK_SET);
-			file_copy(fin, fout, -1);
-			fclose(fin);
-			fclose(fout);
-			remove(tmppath);
-		}
-		else
-		{
-			fclose(fout);
-			remove(fpath);
-		}
+		remove(fpath);
+		rename(tmppath, fpath);
 	}
 	else
 	{
@@ -437,7 +412,7 @@ bool grit_xp_gas(GritRec *gr)
 	{
 		// Open temp and input file
 		tmpnam(tmppath);
-		if( (fout=fopen(tmppath, "w+")) == NULL)
+		if( (fout=fopen(tmppath, "w")) == NULL)
 			return false;
 
 		fin= fopen(fpath, "r");
@@ -491,22 +466,10 @@ bool grit_xp_gas(GritRec *gr)
 		file_copy(fout, fin, -1);
 
 		// close files and rename
+		fclose(fout);
 		fclose(fin);
-		if (rename(tmppath, fpath) < 0)
-		{
-			// in case rename fails, copy over the source file instead
-			fin= fopen(fpath, "w");
-			fseek(fout, 0, SEEK_SET);
-			file_copy(fin, fout, -1);
-			fclose(fin);
-			fclose(fout);
-			remove(tmppath);
-		}
-		else
-		{
-			fclose(fout);
-			remove(fpath);
-		}
+		remove(fpath);
+		rename(tmppath, fpath);
 	}
 	else
 	{
@@ -1062,7 +1025,7 @@ bool grit_xp_h(GritRec *gr)
 	{
 		// Open temp and input file
 		tmpnam(tmppath);
-		if( (fout=fopen(tmppath, "w+")) == NULL)
+		if( (fout=fopen(tmppath, "w")) == NULL)
 			return false;
 
 		fin= fopen(fpath, "r");
@@ -1120,22 +1083,10 @@ bool grit_xp_h(GritRec *gr)
 		file_copy(fout, fin, -1);
 
 		// close files and rename
+		fclose(fout);
 		fclose(fin);
-		if (rename(tmppath, fpath) < 0)
-		{
-			// in case rename fails, copy over the source file instead
-			fin= fopen(fpath, "w");
-			fseek(fout, 0, SEEK_SET);
-			file_copy(fin, fout, -1);
-			fclose(fin);
-			fclose(fout);
-			remove(tmppath);
-		}
-		else
-		{
-			fclose(fout);
-			remove(fpath);
-		}
+		remove(fpath);
+		rename(tmppath, fpath);
 	}
 	else
 	{
@@ -1175,19 +1126,9 @@ bool grit_preface(GritRec *gr, FILE *fp, const char *cmt)
 	mw= gr->metaWidth;
 	mh= gr->metaHeight;
 
-	//build a bpp or texformat description
-	char bppDescr[16];
-	sprintf(bppDescr,"%d",gr->gfxBpp);
-	switch(gr->gfxTexMode)
-	{
-	case GRIT_TEXFMT_NONE: break;
-	case GRIT_TEXFMT_A5I3: strcpy(bppDescr,"a5i3"); break;
-	case GRIT_TEXFMT_A3I5: strcpy(bppDescr,"a3i5"); break;
-	case GRIT_TEXFMT_4x4: strcpy(bppDescr,"4x4"); break;
-	}
-
 	fprintf(fp, "%s%s\n", hline, cmt);
-	fprintf(fp, "%s\t%s, %dx%d@%s, \n", cmt, gr->symName, aw, ah, bppDescr);
+	fprintf(fp, "%s\t%s, %dx%d@%d, \n", cmt, gr->symName, 
+		aw, ah, gr->gfxBpp);
 
 	// Transparency options
 	if(gr->gfxHasAlpha)
