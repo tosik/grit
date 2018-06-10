@@ -23,7 +23,7 @@
 int dib_get_pbank(CLDIB *dib);
 bool dib_set_pbank(CLDIB *dib, int pbank);
 bool dib_tilecmp(CLDIB *dib, CLDIB *tileset, int tid, u32 mask);
-Mapsel dib_find(CLDIB *dib, CLDIB *tileset, u32 tileN, u32 flags);
+Mapsel dib_find(CLDIB *dib, CLDIB *tileset, int tileN, u32 flags);
 
 /*!	\}	*/
 
@@ -199,7 +199,7 @@ bool tmap_init_from_dib(Tilemap *tm, CLDIB *dib, int tileW, int tileH,
 		return false;
 
 	// Init new tileset
-	u32 rdxN;
+	int rdxN;
 	CLDIB *rdx;
 
 	if(extTiles != NULL && dibB == dib_get_bpp(extTiles))
@@ -224,7 +224,7 @@ bool tmap_init_from_dib(Tilemap *tm, CLDIB *dib, int tileW, int tileH,
 	CLDIB *tmpDib= dib_copy(dib, 0, 0, tileW, tileH, false);
 	int tmpP= dib_get_pitch(tmpDib);	
 	u8 *tmpD= dib_get_img(tmpDib);
-	
+
 	int iy, tx, ty;
 
 	if(flags & TMAP_COLMAJOR)
@@ -255,28 +255,28 @@ bool tmap_init_from_dib(Tilemap *tm, CLDIB *dib, int tileW, int tileH,
 	}
 	else
 	{
-	for(ty=0; ty<mapH; ty++)
-	{
-		for(tx=0; tx<mapW; tx++)
+		for(ty=0; ty<mapH; ty++)
 		{
-			// Prep comparison DIB
-			for(iy=0; iy<tileH; iy++)
-				memcpy(&tmpD[iy*tmpP], 
-					dib_get_img_at(dib, tx*tileW, ty*tileH+iy), tmpP);
-			
-			me= dib_find(tmpDib, rdx, rdxN, flags);
-
-			// Not found? Add to tileset
-				if(me.index() >= rdxN)
+			for(tx=0; tx<mapW; tx++)
 			{
-				memcpy(dib_get_img_at(rdx, 0, tileH*rdxN), tmpD,
-					dib_get_size_img(tmpDib));
-				rdxN++;
-			}
+				// Prep comparison DIB
+				for(iy=0; iy<tileH; iy++)
+					memcpy(&tmpD[iy*tmpP], 
+						dib_get_img_at(dib, tx*tileW, ty*tileH+iy), tmpP);
 
-			mapD[ty*mapW+tx]= me;
+				me= dib_find(tmpDib, rdx, rdxN, flags);
+
+				// Not found? Add to tileset
+				if(me.index() >= rdxN)
+				{
+					memcpy(dib_get_img_at(rdx, 0, tileH*rdxN), tmpD,
+						dib_get_size_img(tmpDib));
+					rdxN++;
+				}
+
+				mapD[ty*mapW+tx]= me;
+			}
 		}
-	}
 	}
 
 	// Shrink tileset
@@ -339,7 +339,7 @@ CLDIB *tmap_render(Tilemap *tm, const RECT *rect)
 		ty= MAX(0, rect->top);
 		mapD += ty*mapP + tx;
 		mapW= MIN(mapW, rect->right)-tx;
-		mapH= MIN(mapH, rect->bottom)-ty;						
+		mapH= MIN(mapH, rect->bottom)-ty;
 	}
 
 	// --- Create new dib ---
@@ -396,47 +396,44 @@ void tmap_pack(const Tilemap *tm, RECORD *dstRec, const MapselFormat *mf)
 	int ix, iy;
 	int mapW= tm->width, mapH= tm->height;
 
-	RECORD rec= { mf->bitDepth/8, mapW*mapH, NULL };
+	RECORD rec= { 4, mapW*mapH, NULL };
 	rec.data= (BYTE*)malloc(rec_size(&rec));
 
 	const Mapsel *srcL= tm->data;
+	u32 *dstL= (u32*)rec.data;
 
 	//# TODO: safety checks?
 
-	if (mf->bitDepth == 8 ) {
-		u8 *dstL= (u8*)rec.data;
-		// --- Convert map format ---
-		for(iy=0; iy<mapH; iy++)
+	// --- Convert map format ---
+	for(iy=0; iy<mapH; iy++)
+	{
+		for(ix=0; ix<mapW; ix++)
 		{
-			for(ix=0; ix<mapW; ix++)
-			{
-				*dstL++ = srcL->index() & 0xff;
-				*srcL++;
-			}
-		}
-		
-	} else {
-		
-		u16 *dstL= (u16*)rec.data;
-		// --- Convert map format ---
-		for(iy=0; iy<mapH; iy++)
-		{
-			for(ix=0; ix<mapW; ix++)
-			{
-				u32 res= 0;
-				if(mf->idLen)
-					bfSet(res, srcL->index(), mf->idShift, mf->idLen);
-				if(mf->hfLen)
-					bfSet(res, srcL->hflip(), mf->hfShift, mf->hfLen);
-				if(mf->vfLen)
-					bfSet(res, srcL->vflip(), mf->vfShift, mf->vfLen);
-				if(mf->pbLen)
-					bfSet(res, srcL->pbank(), mf->pbShift, mf->pbLen);
+			u32 res= 0;
+			if(mf->idLen)
+				bfSet(res, srcL->index(), mf->idShift, mf->idLen);
+			if(mf->hfLen)
+				bfSet(res, srcL->hflip(), mf->hfShift, mf->hfLen);
+			if(mf->vfLen)
+				bfSet(res, srcL->vflip(), mf->vfShift, mf->vfLen);
+			if(mf->pbLen)
+				bfSet(res, srcL->pbank(), mf->pbShift, mf->pbLen);
 
-				*dstL++ = res + mf->base;
-				*srcL++;
-			}
+			*dstL++ = res + mf->base;
+			*srcL++;
 		}
+	}
+
+	//# TODO: endianness
+
+	// --- pack to proper mapsel bit-size ---
+	//# PONDER: integrate packing into main conversion?
+	if(mf->bitDepth < 32)
+	{
+		uint size= dib_align(mapW*mapH, mf->bitDepth);
+		u8 *data= (u8*)malloc(size);
+		data_bit_pack(data, rec.data, rec_size(&rec), 32, mf->bitDepth, 0); 
+		rec_attach(&rec, data, 1, size);
 	}
 
 	rec_alias(dstRec, &rec);
@@ -575,8 +572,8 @@ bool dib_tilecmp(CLDIB *dib, CLDIB *tileset, int tid, u32 dwMask)
 	u8 *dibD= dib_get_img(dib), *dibL;
 	u8 *tileD= dib_get_img_at(tileset, 0, tid*tileH), *tileL;
 
-		for(iy=0; iy<tileH; iy++)
-		{
+	for(iy=0; iy<tileH; iy++)
+	{
 		dibL = &dibD[iy*dibP];
 		tileL= &tileD[iy*tileP];
 		for(ix=0; ix<tileW; ix++)
@@ -586,11 +583,11 @@ bool dib_tilecmp(CLDIB *dib, CLDIB *tileset, int tid, u32 dwMask)
 			{
 				if((*dibL++ ^ *tileL++) & mask)
 					return false;
-		mask >>= 8;
-	}
+				mask >>= 8;
+			}
 		}
 	}
-	
+
 	return true;	
 }
 
@@ -606,12 +603,12 @@ bool dib_tilecmp(CLDIB *dib, CLDIB *tileset, int tid, u32 dwMask)
 	  size and bitdepth of the tiles. If you want flipped tiled, 
 	  flip \a dib outside.
 */
-Mapsel dib_find(CLDIB *dib, CLDIB *tileset, u32 tileN, u32 flags)
+Mapsel dib_find(CLDIB *dib, CLDIB *tileset, int tileN, u32 flags)
 {
 	int i;
 	int dibB= dib_get_bpp(dib);
 	u32 mask;
-	Mapsel me= { tileN };
+	Mapsel me= { (u32)tileN };
 
 	if( dibB == 8 && (flags & TMAP_PBANK) )
 	{
@@ -620,7 +617,7 @@ Mapsel dib_find(CLDIB *dib, CLDIB *tileset, u32 tileN, u32 flags)
 	}
 	else
 		mask= 0xFFFFFFFF;
-	
+
 	// Early escape for non-reducing mapping.
 	if(~flags & TMAP_TILE)
 	{

@@ -341,7 +341,7 @@ CLDIB *dib_true_to_8_copy(CLDIB *src, int nclrs)
 		return NULL;
 	try
 	{
-		dibWuQuantizer wuq(src);
+		WuQuantizer wuq(src);
 		dst= wuq.Quantize(nclrs);
 	}
 	catch(...) {}
@@ -445,10 +445,6 @@ bool data_bit_pack(void *dstv, const void *srcv,
 	DWORD dstEndMask= ((base&BUP_BEBIT) && dstB<8) ? 8-dstB : 0;
 	base &= ~(BUP_BEBIT|BUP_BASE0);
 
-	int dstB_add = dstB;
-	if(dstB == 5) dstB_add = 8;
-	if(dstB == 3) dstB_add = 8;
-
 	dstBuf= dstShift= 0;
 	// NOTE: srcB >= dstB means src-buffer is used up sooner
 	while(srcN--)
@@ -464,7 +460,7 @@ bool data_bit_pack(void *dstv, const void *srcv,
 			if(tmp || bBase0)
 				tmp -= base;
 			dstBuf |= (tmp&dstMask)<<(dstShift^dstEndMask);
-			dstShift += dstB_add;
+			dstShift += dstB;
 		}
 		if(dstShift >= 32)	// dst buffer full, store
 		{

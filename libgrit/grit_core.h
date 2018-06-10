@@ -37,6 +37,15 @@ typedef u16 COLOR;
 // --------------------------------------------------------------------
 
 
+#ifndef GRIT_VERSION
+#define GRIT_VERSION	"0.8.6"
+#endif
+
+#ifndef GRIT_BUILD
+#define GRIT_BUILD		"20100327"
+#endif
+
+
 enum EGritItem
 {
 	GRIT_ITEM_GFX		= 0,		//!< Graphics stuff
@@ -81,14 +90,6 @@ enum EGritGraphicsMode
 	GRIT_GFX_TILE	= 0,	//!< 8x8 Tiled graphics `-gt'
 	GRIT_GFX_BMP	= 1,	//!< Bitmap graphics `-gb'
 	GRIT_GFX_BMP_A	= 2,	//!< Full alpha-bit ` -gb -gT!' 
-};
-
-enum EGritGraphicsTextureFormat
-{
-	GRIT_TEXFMT_NONE = 0,
-	GRIT_TEXFMT_A5I3 = 1,
-	GRIT_TEXFMT_A3I5 = 2,
-	GRIT_TEXFMT_4x4 = 3,
 };
 
 //! Tilemap reduction modes.
@@ -204,8 +205,7 @@ struct GritShared
 	echar	 sharedMode;	//!< Main mode.
 	echar	 logMode;		//!< Logging level
 	char	*tilePath;		//!< Path to external tileset (can be NULL)
-	char	*symName;		//!< Shared symbol name
-	char	*dstPath;		//!< Path to shared datastore (can be NULL)
+//	char	*symName;		//!< Shared symbol name (unused for now)
 	u8		 gfxBpp;		//!< Bitdepth for shared graphics (unused for now)
 	CLDIB	*dib;			//!< External tileset DIB (can be NULL)
 	RECORD	 palRec;		//!< Shared palette (unused for now)
@@ -266,9 +266,7 @@ struct GritRec
 	echar	 gfxDataType;	//!< Graphics data type (-gu{num} ).
 	echar	 gfxCompression;	//!< Graphics compression type
 	echar	 gfxMode;		//!< Graphics mode (tile, bmp, bmpA).
-	bool	 texModeEnabled; //!< texture operations enabled
 	u8		 gfxBpp;		//!< Output bitdepth (-gB{num} ).
-	u8		 gfxTexMode; //!< Output texmode, if it is a special texture mode
 	bool	 gfxHasAlpha;	//!< Input image has transparent color.
 	RGBQUAD	 gfxAlphaColor;	//!< Transparent color (-gT {num} ). 
 	u32		 gfxOffset;		//!< Pixel value offset (-ga {num}).
@@ -298,7 +296,6 @@ struct GritRec
 	u32		 palAlphaId;	//!< Transparent palette entry
 	int		 palStart;		//!< First palette entry to export.
 	int		 palEnd;		//!< Final palette entry to export (exclusive)
-	bool	 palEndSet;		//!< Whether the user set the palette end
 	bool	 palIsShared;	//!< Shared palette (-pS),
 
 // Shared information
@@ -306,7 +303,6 @@ struct GritRec
 
 // Private: keep the f#^$k off
 	CLDIB	*_dib;		//!< Internal work bitmap
-	CLDIB *_origDib; //!< unmodified bitmap, for preserving alpha channel
 	RECORD	 _gfxRec;	//!< Output graphics data
 	RECORD	 _mapRec;	//!< Output tilemap data
 	RECORD	 _metaRec;	//!< Output metatile data
