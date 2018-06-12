@@ -1,18 +1,18 @@
 # grit
 Game Raster Image Transmogrifier
 
-How to build
+## How to build
 
-Ubuntu
+- Ubuntu
+  - Install libraries
 
-Install libraries
+`sudo apt-get install autoconf automake libtool`
 
-- sudo apt-get install autoconf automake libtool
+- Build
 
-Build
-
-- ./autogen.sh
-- ./configure
-- make
-
+`
+./autogen.sh
+./configure
+make
+`
 
